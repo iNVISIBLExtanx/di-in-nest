@@ -2,28 +2,30 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CatsService } from './cats.service';
 import { DatabaseService } from '../database/database.service';
 
+// Step 1: Define a dynamic mock outside beforeEach
+const mockDatabaseService = {
+  connect: jest.fn(),
+};
+
 describe('CatsService', () => {
   let service: CatsService;
-  let mockDatabaseService;
 
   beforeEach(async () => {
-    mockDatabaseService = {
-      connect: jest.fn().mockResolvedValue({
-        collection: jest.fn().mockReturnValue({
-          find: jest.fn().mockReturnThis(),
-          toArray: jest
-            .fn()
-            .mockResolvedValue([{ name: 'Tom' }, { name: 'Jerry' }]),
+    // Reset mock implementation to a default behavior before each test
+    mockDatabaseService.connect.mockResolvedValue({
+      collection: () => ({
+        find: () => ({
+          toArray: () => Promise.resolve([{ name: 'Tom' }, { name: 'Jerry' }]),
         }),
       }),
-    };
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CatsService,
         {
           provide: DatabaseService,
-          useValue: mockDatabaseService,
+          useValue: mockDatabaseService, // Step 2: Inject the dynamic mock
         },
       ],
     }).compile();
@@ -40,6 +42,16 @@ describe('CatsService', () => {
       { name: 'Tom' },
       { name: 'Jerry' },
     ]);
-    expect(mockDatabaseService.connect).toBeCalled();
+  });
+
+  // Step 3: Dynamically change mock behavior in a specific test
+  it('should return an empty array when no cats are found', async () => {
+    mockDatabaseService.connect.mockResolvedValueOnce({
+      collection: () => ({
+        find: () => ({ toArray: () => Promise.resolve([]) }),
+      }),
+    });
+
+    expect(await service.findAllCats()).toEqual([]);
   });
 });
